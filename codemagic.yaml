@@ -57,11 +57,17 @@ workflows:
           set -e
           echo "Using automatic code signing (Xcode will manage certificates)"
 
-      - name: "📱 Setup provisioning (let Xcode auto-select)"
+      - name: "📱 Install Development Provisioning Profile"
         script: |
           set -e
-          echo "Using automatic code signing with Team ID: Y5JJF5H7HR"
-          echo "Xcode will auto-select appropriate provisioning profile"
+          BUILD_ROOT="${CM_BUILD_DIR:-$(pwd)/..}"
+          PROFILE_SRC="$BUILD_ROOT/ios/codemagic/VisionClaw_Development.mobileprovision"
+          PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
+
+          mkdir -p "$PROFILE_DIR"
+          cp "$PROFILE_SRC" "$PROFILE_DIR/"
+          xcode-project use-profiles
+          echo "✅ Development provisioning profile installed"
 
       - name: "📦 Prepare Xcode project"
         script: |
