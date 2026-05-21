@@ -78,6 +78,7 @@ workflows:
             -configuration Release \
             -derivedDataPath build \
             -archivePath "build/CameraAccess.xcarchive" \
+            -allowProvisioningUpdates \
             CODE_SIGN_STYLE=Automatic
 
           xcodebuild -exportArchive \
