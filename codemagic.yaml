@@ -74,8 +74,11 @@ workflows:
       - name: "📱 Install Ad Hoc Provisioning Profile"
         script: |
           set -e
-          PROFILE_SRC="ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
+          BUILD_ROOT="${CM_BUILD_DIR:-$(pwd)/..}"
+          PROFILE_SRC="$BUILD_ROOT/ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
           PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
+
+          echo "Looking for profile at: $PROFILE_SRC"
 
           if [ ! -f "$PROFILE_SRC" ]; then
             echo "❌ Profile not found at $PROFILE_SRC"
