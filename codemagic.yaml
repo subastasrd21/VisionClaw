@@ -1,93 +1,214 @@
+# VisionClaw CI/CD configuration for Meta Rayban 2
+#
+# Workflows:
+#   vision-claw-ios — build signed iOS IPA + auto-publish to TestFlight
+#   vision-claw-android — build signed Android APK + AAB for Play Store
+#
+# Required Codemagic setup in the UI:
+#
+# 1. Team Settings -> Integrations -> App Store Connect API
+#    -> "Connect" / "Add new"
+#    -> Name: "VisionClaw App Store Connect"
+#    -> Paste Issuer ID, Key ID, .p8 file contents
+#    -> Save
+#    Codemagic auto-injects APP_STORE_CONNECT_* variables when workflow
+#    references this integration by name.
+#
+# 2. Environment variables -> create groups:
+#
+#    visionclaw-secrets  (mark each entry "Secret")
+#      GEMINI_API_KEY
+#      DISTRIBUTION_CERT_B64      (your .p12 file, base64 encoded)
+#      DISTRIBUTION_CERT_PASSWORD (password for the .p12)
+#
+#    visionclaw-config   (NOT secret — plain values)
+#      BUNDLE_ID
+#      APP_STORE_APPLE_ID
+#
+# 3. iOS Signing: Upload provisioning profile to repo at:
+#    ios/codemagic/VisionClaw_App_Store.mobileprovision
+#
+# To trigger builds: Codemagic UI -> ios-testflight workflow -> Start new build,
+# then pick branch (main, development, etc).
+# Once stable, add a `triggering:` section to auto-build on push to main.
+
 workflows:
   vision-claw-ios:
-    name: VisionClaw iOS Build
+    name: VisionClaw iOS → TestFlight
     instance_type: mac_mini_m2
-    max_build_duration: 120
-
+    max_build_duration: 90
+    working_directory: samples/CameraAccess
+    integrations:
+      app_store_connect: "VisionClaw App Store Connect"
     environment:
-      ios_signing:
-        provisioning_profiles:
-          - $PROVISIONING_PROFILE
-        certificates:
-          - $CERTIFICATE
+      groups:
+        - visionclaw-secrets
+        - visionclaw-config
       vars:
-        GEMINI_API_KEY: $GEMINI_API_KEY
-        XCODE_WORKSPACE: "samples/CameraAccess/CameraAccess.xcworkspace"
+        XCODE_WORKSPACE: "CameraAccess.xcworkspace"
         XCODE_SCHEME: "CameraAccess"
-        BUNDLE_ID: "com.intentlab.visionclaw"
       xcode: latest
       cocoapods: default
 
     scripts:
-      - name: Install dependencies
+      - name: "📌 Build Info"
         script: |
-          cd samples/CameraAccess
-          pod install
+          echo "===================="
+          echo "VisionClaw iOS Build"
+          echo "===================="
+          echo "Xcode workspace: $XCODE_WORKSPACE"
+          echo "Scheme: $XCODE_SCHEME"
+          echo "Bundle ID: $BUNDLE_ID"
+          echo "App Store ID: $APP_STORE_APPLE_ID"
+          echo "Build number: $BUILD_NUMBER"
+          ls -la
 
-      - name: Build iOS app
+      - name: "🔑 Initialize Keychain"
         script: |
-          cd samples/CameraAccess
-          xcodebuild build \
-            -workspace CameraAccess.xcworkspace \
-            -scheme CameraAccess \
+          set -e
+          keychain initialize
+
+      - name: "📜 Add Distribution Certificate"
+        script: |
+          set -e
+          : "${DISTRIBUTION_CERT_B64:?missing — add as Secret env var}"
+          : "${DISTRIBUTION_CERT_PASSWORD:?missing — add as Secret env var}"
+
+          CERT_PATH="/tmp/distribution_cert.p12"
+          echo "$DISTRIBUTION_CERT_B64" | base64 --decode > "$CERT_PATH"
+
+          keychain add-certificates \
+            --certificate "$CERT_PATH" \
+            --certificate-password "$DISTRIBUTION_CERT_PASSWORD"
+
+          rm -f "$CERT_PATH"
+          echo "✅ Certificate added to keychain"
+
+      - name: "📱 Install Provisioning Profile"
+        script: |
+          set -e
+          PROFILE_SRC="ios/codemagic/VisionClaw_App_Store.mobileprovision"
+          PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
+
+          if [ ! -f "$PROFILE_SRC" ]; then
+            echo "❌ Profile not found at $PROFILE_SRC"
+            echo "Make sure to commit it to the repo"
+            exit 1
+          fi
+
+          mkdir -p "$PROFILE_DIR"
+          cp "$PROFILE_SRC" "$PROFILE_DIR/"
+          xcode-project use-profiles
+          echo "✅ Provisioning profile installed"
+
+      - name: "📦 Install CocoaPods dependencies"
+        script: |
+          set -e
+          rm -rf Pods Podfile.lock
+          pod install --repo-update
+
+      - name: "🏗️ Build iOS IPA"
+        script: |
+          set -e
+          xcodebuild build-for-testing \
+            -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
             -configuration Release \
-            -derivedDataPath build
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="Apple Distribution"
 
-      - name: Create IPA
-        script: |
-          cd samples/CameraAccess
           xcodebuild -exportArchive \
-            -archivePath build/CameraAccess.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
-            -exportPath build/ipa
+            -archivePath "build/CameraAccess.xcarchive" \
+            -exportOptionsPlist "ExportOptions.plist" \
+            -exportPath "build/ipa" \
+            -allowProvisioningUpdates
+
+      - name: "🚀 Publish to TestFlight"
+        script: |
+          echo "TestFlight publishing configured via Codemagic UI"
+          echo "Auto-uploading IPA to TestFlight..."
 
     artifacts:
       - build/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
 
     publishing:
       app_store_connect:
         auth: integration
-        testflight: true
+        submit_to_testflight: true
         beta_groups:
           - VisionClaw Testers
 
-  vision-claw-android:
-    name: VisionClaw Android Build
-    instance_type: linux
-    max_build_duration: 120
+      email:
+        recipients:
+          - subastasrd21@gmail.com
+        notify:
+          success: true
+          failure: true
 
+  vision-claw-android:
+    name: VisionClaw Android → Play Store
+    instance_type: linux
+    max_build_duration: 90
+    working_directory: samples/CameraAccessAndroid
     environment:
+      groups:
+        - visionclaw-secrets
       vars:
-        GEMINI_API_KEY: $GEMINI_API_KEY
         GRADLE_HOME: $HOME/.gradle
       android_signing:
         - keystore_reference
       java: java17
 
     scripts:
-      - name: Set Gradle properties
+      - name: "📌 Build Info"
         script: |
+          echo "========================"
+          echo "VisionClaw Android Build"
+          echo "========================"
+          echo "Gradle version: $(./gradlew --version | grep Gradle)"
+          pwd
+          ls -la
+
+      - name: "⚙️ Configure Gradle"
+        script: |
+          set -e
           echo "org.gradle.jvmargs=-Xmx4096m" >> ~/.gradle/gradle.properties
           echo "android.useAndroidX=true" >> ~/.gradle/gradle.properties
 
-      - name: Build Android app
+      - name: "📦 Build Release"
         script: |
-          cd samples/CameraAccessAndroid
+          set -e
           ./gradlew clean build \
             -Pandroid.useAndroidX=true \
-            -Porg.gradle.jvmargs="-Xmx4096m"
+            -Porg.gradle.jvmargs="-Xmx4096m" \
+            --stacktrace
 
-      - name: Create APK (debug)
+      - name: "📦 Build Release Bundle (AAB)"
         script: |
-          cd samples/CameraAccessAndroid
-          ./gradlew assembleDebug
+          set -e
+          ./gradlew bundleRelease \
+            -Pandroid.useAndroidX=true
+
+      - name: "✅ Build Complete"
+        script: |
+          echo "=== Artifacts ready ==="
+          ls -lah app/build/outputs/apk/release/
+          ls -lah app/build/outputs/bundle/release/
 
     artifacts:
-      - samples/CameraAccessAndroid/app/build/outputs/apk/**/*.apk
-      - samples/CameraAccessAndroid/app/build/outputs/bundle/**/*.aab
+      - app/build/outputs/apk/release/*.apk
+      - app/build/outputs/bundle/release/*.aab
 
     publishing:
       google_play:
         credentials: $ANDROID_KEYSTORE
         track: internal
         submit_as_draft: true
+
+      email:
+        recipients:
+          - subastasrd21@gmail.com
+        notify:
+          success: true
+          failure: true
