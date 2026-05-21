@@ -1,8 +1,18 @@
 .DS_Store
 
-# Android
+# Secrets (API Keys)
+samples/CameraAccess/CameraAccess/Secrets.swift
 samples/CameraAccessAndroid/app/src/main/java/**/Secrets.kt
 samples/CameraAccessAndroid/local.properties
+
+# Build files
 samples/CameraAccessAndroid/.gradle/
 samples/CameraAccessAndroid/build/
 samples/CameraAccessAndroid/app/build/
+samples/CameraAccess/build/
+samples/CameraAccess/.xcworkspace/xcuserdata/
+
+# IDE
+.idea/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/

@@ -1,0 +1,93 @@
+workflows:
+  vision-claw-ios:
+    name: VisionClaw iOS Build
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+
+    environment:
+      ios_signing:
+        provisioning_profiles:
+          - $PROVISIONING_PROFILE
+        certificates:
+          - $CERTIFICATE
+      vars:
+        GEMINI_API_KEY: $GEMINI_API_KEY
+        XCODE_WORKSPACE: "samples/CameraAccess/CameraAccess.xcworkspace"
+        XCODE_SCHEME: "CameraAccess"
+        BUNDLE_ID: "com.intentlab.visionclaw"
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          cd samples/CameraAccess
+          pod install
+
+      - name: Build iOS app
+        script: |
+          cd samples/CameraAccess
+          xcodebuild build \
+            -workspace CameraAccess.xcworkspace \
+            -scheme CameraAccess \
+            -configuration Release \
+            -derivedDataPath build
+
+      - name: Create IPA
+        script: |
+          cd samples/CameraAccess
+          xcodebuild -exportArchive \
+            -archivePath build/CameraAccess.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/ipa
+
+    artifacts:
+      - build/ipa/*.ipa
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        testflight: true
+        beta_groups:
+          - VisionClaw Testers
+
+  vision-claw-android:
+    name: VisionClaw Android Build
+    instance_type: linux
+    max_build_duration: 120
+
+    environment:
+      vars:
+        GEMINI_API_KEY: $GEMINI_API_KEY
+        GRADLE_HOME: $HOME/.gradle
+      android_signing:
+        - keystore_reference
+      java: java17
+
+    scripts:
+      - name: Set Gradle properties
+        script: |
+          echo "org.gradle.jvmargs=-Xmx4096m" >> ~/.gradle/gradle.properties
+          echo "android.useAndroidX=true" >> ~/.gradle/gradle.properties
+
+      - name: Build Android app
+        script: |
+          cd samples/CameraAccessAndroid
+          ./gradlew clean build \
+            -Pandroid.useAndroidX=true \
+            -Porg.gradle.jvmargs="-Xmx4096m"
+
+      - name: Create APK (debug)
+        script: |
+          cd samples/CameraAccessAndroid
+          ./gradlew assembleDebug
+
+    artifacts:
+      - samples/CameraAccessAndroid/app/build/outputs/apk/**/*.apk
+      - samples/CameraAccessAndroid/app/build/outputs/bundle/**/*.aab
+
+    publishing:
+      google_play:
+        credentials: $ANDROID_KEYSTORE
+        track: internal
+        submit_as_draft: true
