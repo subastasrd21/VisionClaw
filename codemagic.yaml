@@ -57,6 +57,23 @@ workflows:
           set -e
           echo "Using automatic code signing (Xcode will manage certificates)"
 
+      - name: "🔐 Generate Secrets.swift"
+        script: |
+          set -e
+          cat > CameraAccess/Secrets.swift <<'EOF'
+import Foundation
+
+enum Secrets {
+  static let geminiAPIKey = "$GEMINI_API_KEY"
+  static let openClawHost = "http://localhost"
+  static let openClawPort = 18789
+  static let openClawHookToken = ""
+  static let openClawGatewayToken = ""
+  static let webrtcSignalingURL = "ws://localhost:8080"
+}
+EOF
+          echo "✅ Secrets.swift generated"
+
       - name: "📱 Install Development Provisioning Profile"
         script: |
           set -e
