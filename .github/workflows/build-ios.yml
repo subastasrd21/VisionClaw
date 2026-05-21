@@ -38,18 +38,22 @@ jobs:
           security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Import certificate
+          # Extract and import certificate
           CERT_PATH=$RUNNER_TEMP/development_cert.p12
           printf '%s' "$DEVELOPMENT_CERT_B64" | base64 -D > "$CERT_PATH"
 
-          # Debug: verify certificate file
-          echo "Certificate file size: $(stat -f%z "$CERT_PATH" 2>/dev/null || stat -c%s "$CERT_PATH")"
-          openssl pkcs12 -in "$CERT_PATH" -passin pass:"$DEVELOPMENT_CERT_PASSWORD" -noout -info 2>&1 | head -3 || echo "Certificate validation failed"
+          # Extract certificate and key from PKCS12
+          CERT_PEM=$RUNNER_TEMP/cert.pem
+          KEY_PEM=$RUNNER_TEMP/key.pem
 
-          security import "$CERT_PATH" \
-            -k "$KEYCHAIN_PATH" \
-            -P "$DEVELOPMENT_CERT_PASSWORD" \
-            -T /usr/bin/codesign
+          openssl pkcs12 -in "$CERT_PATH" -passin pass:"$DEVELOPMENT_CERT_PASSWORD" -clcerts -nokeys -out "$CERT_PEM" 2>/dev/null
+          openssl pkcs12 -in "$CERT_PATH" -passin pass:"$DEVELOPMENT_CERT_PASSWORD" -nocerts -nodes -out "$KEY_PEM" 2>/dev/null
+
+          # Recreate PKCS12 without password
+          openssl pkcs12 -export -in "$CERT_PEM" -inkey "$KEY_PEM" -out "$CERT_PATH" -passout pass: 2>/dev/null
+
+          # Import to keychain
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "" -T /usr/bin/codesign
 
           # Add keychain to search list
           security list-keychains -s "$KEYCHAIN_PATH" $(security list-keychains | sed s/\"//g)
