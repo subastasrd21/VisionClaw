@@ -23,40 +23,21 @@ jobs:
           xcode-select -p
 
       - name: Create Keychain and Import Certificate
-        env:
-          DEVELOPMENT_CERT_B64: ${{ secrets.DEVELOPMENT_CERT_B64 }}
-          DEVELOPMENT_CERT_PASSWORD: ${{ secrets.DEVELOPMENT_CERT_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           set -e
 
-          # Create temporary keychain
-          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
-          KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD:-build123}
+          # Use certificate without password from repo
+          CERT_PATH="ios/codemagic/development_cert_no_password.p12"
 
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          if [ ! -f "$CERT_PATH" ]; then
+            echo "❌ Certificate not found at $CERT_PATH"
+            exit 1
+          fi
 
-          # Extract and import certificate
-          CERT_PATH=$RUNNER_TEMP/development_cert.p12
-          printf '%s' "$DEVELOPMENT_CERT_B64" | base64 -D > "$CERT_PATH"
+          # Import to default keychain
+          security import "$CERT_PATH" -P "" -T /usr/bin/codesign
 
-          # Extract certificate and key from PKCS12
-          CERT_PEM=$RUNNER_TEMP/cert.pem
-          KEY_PEM=$RUNNER_TEMP/key.pem
-
-          openssl pkcs12 -in "$CERT_PATH" -passin pass:"$DEVELOPMENT_CERT_PASSWORD" -clcerts -nokeys -out "$CERT_PEM" 2>/dev/null
-          openssl pkcs12 -in "$CERT_PATH" -passin pass:"$DEVELOPMENT_CERT_PASSWORD" -nocerts -nodes -out "$KEY_PEM" 2>/dev/null
-
-          # Recreate PKCS12 without password
-          openssl pkcs12 -export -in "$CERT_PEM" -inkey "$KEY_PEM" -out "$CERT_PATH" -passout pass: 2>/dev/null
-
-          # Import to keychain
-          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "" -T /usr/bin/codesign
-
-          # Add keychain to search list
-          security list-keychains -s "$KEYCHAIN_PATH" $(security list-keychains | sed s/\"//g)
+          echo "✅ Certificate imported successfully"
 
       - name: Install Provisioning Profiles
         run: |
