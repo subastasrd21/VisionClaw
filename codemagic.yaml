@@ -60,7 +60,7 @@ workflows:
       - name: "🔐 Generate Secrets.swift"
         script: |
           set -e
-          cat > CameraAccess/Secrets.swift <<'EOF'
+          cat > CameraAccess/Secrets.swift << 'SECRETS'
 import Foundation
 
 enum Secrets {
@@ -71,7 +71,7 @@ enum Secrets {
   static let openClawGatewayToken = ""
   static let webrtcSignalingURL = "ws://localhost:8080"
 }
-EOF
+SECRETS
           echo "✅ Secrets.swift generated"
 
       - name: "📱 Install Development Provisioning Profile"
