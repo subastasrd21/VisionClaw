@@ -62,22 +62,30 @@ jobs:
           mkdir -p "$PROFILE_DIR"
 
           # Install Development profile
-          if [ -f "ios/codemagic/VisionClaw_Development.mobileprovision" ]; then
-            cp "ios/codemagic/VisionClaw_Development.mobileprovision" "$PROFILE_DIR/"
-            echo "✅ Development profile installed"
+          DEV_PROFILE="ios/codemagic/VisionClaw_Development.mobileprovision"
+          if [ -f "$DEV_PROFILE" ]; then
+            cp "$DEV_PROFILE" "$PROFILE_DIR/"
+            echo "✅ Development profile installed to $PROFILE_DIR"
+            ls -lh "$PROFILE_DIR/VisionClaw_Development.mobileprovision"
           else
-            echo "❌ Development profile not found"
+            echo "❌ Development profile not found at $DEV_PROFILE"
             exit 1
           fi
 
           # Install Ad Hoc profile
-          if [ -f "ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision" ]; then
-            cp "ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision" "$PROFILE_DIR/"
+          ADHOC_PROFILE="ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
+          if [ -f "$ADHOC_PROFILE" ]; then
+            cp "$ADHOC_PROFILE" "$PROFILE_DIR/"
             echo "✅ Ad Hoc profile installed"
+            ls -lh "$PROFILE_DIR/VisionClaw_Ad_Hoc.mobileprovision"
           else
-            echo "❌ Ad Hoc profile not found"
+            echo "❌ Ad Hoc profile not found at $ADHOC_PROFILE"
             exit 1
           fi
+
+          # Verify all profiles
+          echo "📋 All provisioning profiles:"
+          ls -lh "$PROFILE_DIR/"
 
       - name: Generate Secrets.swift
         env:
