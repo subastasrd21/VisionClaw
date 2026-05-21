@@ -1,45 +1,33 @@
 # VisionClaw CI/CD configuration for Meta Rayban 2
 #
 # Workflows:
-#   vision-claw-ios — build signed iOS IPA + auto-publish to TestFlight
+#   vision-claw-ios — build signed iOS IPA for Ad Hoc sideload (download from Codemagic)
 #   vision-claw-android — build signed Android APK + AAB for Play Store
 #
 # Required Codemagic setup in the UI:
 #
-# 1. Team Settings -> Integrations -> App Store Connect API
-#    -> "Connect" / "Add new"
-#    -> Name: "VisionClaw App Store Connect"
-#    -> Paste Issuer ID, Key ID, .p8 file contents
-#    -> Save
-#    Codemagic auto-injects APP_STORE_CONNECT_* variables when workflow
-#    references this integration by name.
-#
-# 2. Environment variables -> create groups:
+# 1. Environment variables -> create ONE group:
 #
 #    visionclaw-secrets  (mark each entry "Secret")
 #      GEMINI_API_KEY
-#      DISTRIBUTION_CERT_B64      (your .p12 file, base64 encoded)
-#      DISTRIBUTION_CERT_PASSWORD (password for the .p12)
+#      DEVELOPMENT_CERT_B64       (your .p12 file, base64 encoded)
+#      DEVELOPMENT_CERT_PASSWORD  (password for the .p12)
 #
 #    visionclaw-config   (NOT secret — plain values)
 #      BUNDLE_ID
-#      APP_STORE_APPLE_ID
 #
-# 3. iOS Signing: Upload provisioning profile to repo at:
-#    ios/codemagic/VisionClaw_App_Store.mobileprovision
+# 2. iOS Signing: Upload Ad Hoc provisioning profile to repo at:
+#    ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision
 #
-# To trigger builds: Codemagic UI -> ios-testflight workflow -> Start new build,
-# then pick branch (main, development, etc).
-# Once stable, add a `triggering:` section to auto-build on push to main.
+# 3. To trigger builds: Codemagic UI -> vision-claw-ios workflow -> Start new build
+#    Then DOWNLOAD the IPA and install on iPhone via sideload
 
 workflows:
   vision-claw-ios:
-    name: VisionClaw iOS → TestFlight
+    name: VisionClaw iOS (Ad Hoc Sideload)
     instance_type: mac_mini_m2
-    max_build_duration: 90
+    max_build_duration: 60
     working_directory: samples/CameraAccess
-    integrations:
-      app_store_connect: "VisionClaw App Store Connect"
     environment:
       groups:
         - visionclaw-secrets
@@ -59,7 +47,6 @@ workflows:
           echo "Xcode workspace: $XCODE_WORKSPACE"
           echo "Scheme: $XCODE_SCHEME"
           echo "Bundle ID: $BUNDLE_ID"
-          echo "App Store ID: $APP_STORE_APPLE_ID"
           echo "Build number: $BUILD_NUMBER"
           ls -la
 
@@ -68,31 +55,36 @@ workflows:
           set -e
           keychain initialize
 
-      - name: "📜 Add Distribution Certificate"
+      - name: "📜 Add Development Certificate"
         script: |
           set -e
-          : "${DISTRIBUTION_CERT_B64:?missing — add as Secret env var}"
-          : "${DISTRIBUTION_CERT_PASSWORD:?missing — add as Secret env var}"
+          : "${DEVELOPMENT_CERT_B64:?missing — add as Secret env var}"
+          : "${DEVELOPMENT_CERT_PASSWORD:?missing — add as Secret env var}"
 
-          CERT_PATH="/tmp/distribution_cert.p12"
-          echo "$DISTRIBUTION_CERT_B64" | base64 --decode > "$CERT_PATH"
+          CERT_PATH="/tmp/development_cert.p12"
+          echo "$DEVELOPMENT_CERT_B64" | base64 --decode > "$CERT_PATH"
 
           keychain add-certificates \
             --certificate "$CERT_PATH" \
-            --certificate-password "$DISTRIBUTION_CERT_PASSWORD"
+            --certificate-password "$DEVELOPMENT_CERT_PASSWORD"
 
           rm -f "$CERT_PATH"
           echo "✅ Certificate added to keychain"
 
-      - name: "📱 Install Provisioning Profile"
+      - name: "📱 Install Ad Hoc Provisioning Profile"
         script: |
           set -e
-          PROFILE_SRC="ios/codemagic/VisionClaw_App_Store.mobileprovision"
+          PROFILE_SRC="ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
           PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
 
           if [ ! -f "$PROFILE_SRC" ]; then
             echo "❌ Profile not found at $PROFILE_SRC"
-            echo "Make sure to commit it to the repo"
+            echo "Make sure to commit it to the repo:"
+            echo "  mkdir -p ios/codemagic"
+            echo "  cp ~/Downloads/VisionClaw_Ad_Hoc.mobileprovision ios/codemagic/"
+            echo "  git add ios/codemagic/"
+            echo "  git commit -m 'chore: add Ad Hoc provisioning profile'"
+            echo "  git push"
             exit 1
           fi
 
@@ -107,7 +99,7 @@ workflows:
           rm -rf Pods Podfile.lock
           pod install --repo-update
 
-      - name: "🏗️ Build iOS IPA"
+      - name: "🏗️ Build iOS IPA (Ad Hoc)"
         script: |
           set -e
           xcodebuild build-for-testing \
@@ -115,7 +107,7 @@ workflows:
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="Apple Distribution"
+            CODE_SIGN_IDENTITY="Apple Development"
 
           xcodebuild -exportArchive \
             -archivePath "build/CameraAccess.xcarchive" \
@@ -123,22 +115,35 @@ workflows:
             -exportPath "build/ipa" \
             -allowProvisioningUpdates
 
-      - name: "🚀 Publish to TestFlight"
+      - name: "✅ Build Complete"
         script: |
-          echo "TestFlight publishing configured via Codemagic UI"
-          echo "Auto-uploading IPA to TestFlight..."
+          echo ""
+          echo "=========================================="
+          echo "✅ IPA ready for download!"
+          echo "=========================================="
+          echo ""
+          echo "📥 Download from Codemagic UI:"
+          echo "   Artifacts → build/ipa/CameraAccess.ipa"
+          echo ""
+          echo "📱 Install on iPhone:"
+          echo ""
+          echo "  Option A: Use fastlane (recommended)"
+          echo "    gem install fastlane"
+          echo "    fastlane run install_on_device ipa:path/to/CameraAccess.ipa"
+          echo ""
+          echo "  Option B: Use Xcode (requires Mac)"
+          echo "    open build/ipa/CameraAccess.ipa"
+          echo ""
+          echo "  Option C: Use ios-app-installer"
+          echo "    npm install -g ios-app-installer"
+          echo "    ios-app-installer -i CameraAccess.ipa"
+          echo ""
 
     artifacts:
       - build/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
 
     publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-        beta_groups:
-          - VisionClaw Testers
-
       email:
         recipients:
           - subastasrd21@gmail.com
@@ -149,7 +154,7 @@ workflows:
   vision-claw-android:
     name: VisionClaw Android → Play Store
     instance_type: linux
-    max_build_duration: 90
+    max_build_duration: 60
     working_directory: samples/CameraAccessAndroid
     environment:
       groups:
