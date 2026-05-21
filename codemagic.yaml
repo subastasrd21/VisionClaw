@@ -86,18 +86,22 @@ workflows:
       - name: "🏗️ Build iOS IPA"
         script: |
           set -e
+          echo "Building iOS IPA with automatic signing..."
           xcodebuild archive \
             -project "CameraAccess.xcodeproj" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -derivedDataPath build \
             -archivePath "build/CameraAccess.xcarchive" \
-            -allowProvisioningUpdates
+            -allowProvisioningUpdates \
+            CODE_SIGN_STYLE=Automatic
 
+          echo "Exporting IPA..."
           xcodebuild -exportArchive \
             -archivePath "build/CameraAccess.xcarchive" \
             -exportPath "build/ipa" \
-            -exportOptionsPlist ExportOptions.plist
+            -exportOptionsPlist ExportOptions.plist \
+            -allowProvisioningUpdates
 
       - name: "✅ Build Complete"
         script: |
