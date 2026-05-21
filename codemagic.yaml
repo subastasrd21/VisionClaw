@@ -56,10 +56,11 @@ workflows:
         script: |
           set -e
           # Decode and import development certificate
+          echo "Importing certificate..."
           echo "$DEVELOPMENT_CERT_B64" | base64 --decode > /tmp/dev_cert.p12
-          security import /tmp/dev_cert.p12 -k ~/Library/Keychains/login.keychain-db -P "$DEVELOPMENT_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild || true
+          security import /tmp/dev_cert.p12 -k ~/Library/Keychains/login.keychain-db -P "$DEVELOPMENT_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
           rm -f /tmp/dev_cert.p12
-          echo "✅ Development certificate imported"
+          echo "✅ Certificate imported"
 
       - name: "🔐 Generate Secrets.swift"
         script: |
@@ -67,17 +68,24 @@ workflows:
           printf 'import Foundation\n\nenum Secrets {\n  static let geminiAPIKey = "%s"\n  static let openClawHost = "http://localhost"\n  static let openClawPort = 18789\n  static let openClawHookToken = ""\n  static let openClawGatewayToken = ""\n  static let webrtcSignalingURL = "ws://localhost:8080"\n}\n' "$GEMINI_API_KEY" > CameraAccess/Secrets.swift
           echo "✅ Secrets.swift generated"
 
-      - name: "📱 Install Development Provisioning Profile"
+      - name: "📱 Install Ad Hoc Provisioning Profile"
         script: |
           set -e
           BUILD_ROOT="${CM_BUILD_DIR:-$(pwd)/..}"
-          PROFILE_SRC="$BUILD_ROOT/ios/codemagic/VisionClaw_Development.mobileprovision"
+          PROFILE_SRC="$BUILD_ROOT/ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
           PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
+
+          if [ ! -f "$PROFILE_SRC" ]; then
+            echo "❌ Profile not found at: $PROFILE_SRC"
+            echo "Build root: $BUILD_ROOT"
+            ls -la "$BUILD_ROOT/ios/codemagic/" || echo "Directory not found"
+            exit 1
+          fi
 
           mkdir -p "$PROFILE_DIR"
           cp "$PROFILE_SRC" "$PROFILE_DIR/"
           xcode-project use-profiles
-          echo "✅ Development provisioning profile installed"
+          echo "✅ Ad Hoc provisioning profile installed"
 
       - name: "📦 Prepare Xcode project"
         script: |
@@ -94,14 +102,12 @@ workflows:
             -configuration Release \
             -derivedDataPath build \
             -archivePath "build/CameraAccess.xcarchive" \
-            -allowProvisioningUpdates \
-            CODE_SIGN_STYLE=Automatic
+            -allowProvisioningUpdates
 
           xcodebuild -exportArchive \
             -archivePath "build/CameraAccess.xcarchive" \
             -exportPath "build/ipa" \
-            -exportOptionsPlist <(printf '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>signingStyle</key><string>automatic</string><key>method</key><string>development</string></dict></plist>') \
-            -allowProvisioningUpdates
+            -exportOptionsPlist ExportOptions.plist
 
       - name: "✅ Build Complete"
         script: |
