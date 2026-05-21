@@ -34,8 +34,24 @@ jobs:
             exit 1
           fi
 
-          # Import to default keychain
-          security import "$CERT_PATH" -P "" -T /usr/bin/codesign
+          # Extract cert and key for direct usage
+          CERT_PEM=$RUNNER_TEMP/cert.pem
+          KEY_PEM=$RUNNER_TEMP/key.pem
+
+          openssl pkcs12 -in "$CERT_PATH" -passin pass: -clcerts -nokeys -out "$CERT_PEM"
+          openssl pkcs12 -in "$CERT_PATH" -passin pass: -nocerts -nodes -out "$KEY_PEM"
+
+          # Create KEYCHAIN without setting it as default
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          security create-keychain -p "temp123" "$KEYCHAIN_PATH"
+          security unlock-keychain -p "temp123" "$KEYCHAIN_PATH"
+
+          # Import certificate and key separately
+          security import "$CERT_PEM" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          security import "$KEY_PEM" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+
+          # Set keychain as default
+          security default-keychain -s "$KEYCHAIN_PATH"
 
           echo "✅ Certificate imported successfully"
 
