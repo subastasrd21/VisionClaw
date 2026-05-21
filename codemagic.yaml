@@ -60,18 +60,7 @@ workflows:
       - name: "🔐 Generate Secrets.swift"
         script: |
           set -e
-          cat > CameraAccess/Secrets.swift << 'SECRETS'
-import Foundation
-
-enum Secrets {
-  static let geminiAPIKey = "$GEMINI_API_KEY"
-  static let openClawHost = "http://localhost"
-  static let openClawPort = 18789
-  static let openClawHookToken = ""
-  static let openClawGatewayToken = ""
-  static let webrtcSignalingURL = "ws://localhost:8080"
-}
-SECRETS
+          printf 'import Foundation\n\nenum Secrets {\n  static let geminiAPIKey = "%s"\n  static let openClawHost = "http://localhost"\n  static let openClawPort = 18789\n  static let openClawHookToken = ""\n  static let openClawGatewayToken = ""\n  static let webrtcSignalingURL = "ws://localhost:8080"\n}\n' "$GEMINI_API_KEY" > CameraAccess/Secrets.swift
           echo "✅ Secrets.swift generated"
 
       - name: "📱 Install Development Provisioning Profile"
