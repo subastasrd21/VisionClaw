@@ -42,6 +42,10 @@ jobs:
           CERT_PATH=$RUNNER_TEMP/development_cert.p12
           echo "$DEVELOPMENT_CERT_B64" | base64 -D > "$CERT_PATH"
 
+          # Debug: verify certificate file
+          echo "Certificate file size: $(stat -f%z "$CERT_PATH" 2>/dev/null || stat -c%s "$CERT_PATH")"
+          file "$CERT_PATH"
+
           security import "$CERT_PATH" \
             -k "$KEYCHAIN_PATH" \
             -P "$DEVELOPMENT_CERT_PASSWORD" \
