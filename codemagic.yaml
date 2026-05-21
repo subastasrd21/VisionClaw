@@ -71,14 +71,13 @@ workflows:
       - name: "📱 Install Ad Hoc Provisioning Profile"
         script: |
           set -e
-          BUILD_ROOT="${CM_BUILD_DIR:-$(pwd)/..}"
-          PROFILE_SRC="$BUILD_ROOT/ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
+          PROFILE_SRC="../../ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
           PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
 
           if [ ! -f "$PROFILE_SRC" ]; then
             echo "❌ Profile not found at: $PROFILE_SRC"
-            echo "Build root: $BUILD_ROOT"
-            ls -la "$BUILD_ROOT/ios/codemagic/" || echo "Directory not found"
+            pwd
+            ls -la ../../ios/codemagic/ 2>&1 || echo "Directory not found"
             exit 1
           fi
 
