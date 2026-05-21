@@ -111,7 +111,8 @@ jobs:
             -archivePath build/CameraAccess.xcarchive \
             -destination 'generic/platform=iOS' \
             -allowProvisioningUpdates \
-            -verbose
+            -authenticationKeyPath ~/Library/MobileDevice/Provisioning\ Profiles/VisionClaw_Development.mobileprovision \
+            CODE_SIGN_STYLE=Automatic
 
           echo "Exporting IPA..."
           xcodebuild -exportArchive \
