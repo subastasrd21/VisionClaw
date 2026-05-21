@@ -55,21 +55,29 @@ workflows:
       - name: "🔐 Configure Code Signing"
         script: |
           set -e
-          echo "Installing Ad Hoc provisioning profile for automatic signing..."
-          PROFILE_SRC="../../ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
+          echo "Installing provisioning profiles..."
           PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
 
-          if [ ! -f "$PROFILE_SRC" ]; then
-            echo "❌ Profile not found at: $PROFILE_SRC"
-            pwd
-            ls -la ../../ios/codemagic/ 2>&1 || echo "Directory not found"
+          # Install Development profile for building
+          DEV_PROFILE="../../ios/codemagic/VisionClaw_Development.mobileprovision"
+          if [ ! -f "$DEV_PROFILE" ]; then
+            echo "❌ Development profile not found"
             exit 1
           fi
+          cp "$DEV_PROFILE" "$PROFILE_DIR/"
+          echo "✅ Development profile installed"
 
-          mkdir -p "$PROFILE_DIR"
-          cp "$PROFILE_SRC" "$PROFILE_DIR/"
+          # Install Ad Hoc profile for export
+          ADHOC_PROFILE="../../ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision"
+          if [ ! -f "$ADHOC_PROFILE" ]; then
+            echo "❌ Ad Hoc profile not found"
+            exit 1
+          fi
+          cp "$ADHOC_PROFILE" "$PROFILE_DIR/"
+          echo "✅ Ad Hoc profile installed"
+
           xcode-project use-profiles
-          echo "✅ Ad Hoc provisioning profile installed"
 
       - name: "🔐 Generate Secrets.swift"
         script: |
