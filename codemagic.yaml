@@ -95,16 +95,17 @@ workflows:
         script: |
           set -e
           echo "Building iOS IPA..."
-          xcodebuild -quiet archive \
+          xcodebuild archive \
             -project CameraAccess.xcodeproj \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -derivedDataPath build \
             -archivePath build/CameraAccess.xcarchive \
+            -destination 'generic/platform=iOS' \
             -allowProvisioningUpdates
 
           echo "Exporting IPA..."
-          xcodebuild -quiet -exportArchive \
+          xcodebuild -exportArchive \
             -archivePath build/CameraAccess.xcarchive \
             -exportPath build/ipa \
             -exportOptionsPlist ExportOptions.plist
