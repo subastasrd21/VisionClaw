@@ -97,8 +97,6 @@ jobs:
 
       - name: Build iOS IPA
         working-directory: samples/CameraAccess
-        env:
-          BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
         run: |
           set -e
           echo "Building iOS IPA..."
@@ -111,7 +109,6 @@ jobs:
             -archivePath build/CameraAccess.xcarchive \
             -destination 'generic/platform=iOS' \
             -allowProvisioningUpdates \
-            -authenticationKeyPath ~/Library/MobileDevice/Provisioning\ Profiles/VisionClaw_Development.mobileprovision \
             CODE_SIGN_STYLE=Automatic
 
           echo "Exporting IPA..."
