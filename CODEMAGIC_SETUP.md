@@ -1,31 +1,25 @@
-# Codemagic Setup para VisionClaw (basado en Driports)
+# Codemagic Setup para VisionClaw (Windows/WSL + Ad Hoc Sideload)
 
 Tu fork está en: **https://github.com/subastasrd21/VisionClaw.git**
 
-## ✅ Configuración automática → TestFlight
+## ✨ Setup sin Mac: Codemagic (nube) + Windows (local)
 
-**SÍ**, Codemagic **subirá automáticamente a TestFlight** después de compilar exitosamente.
-
-El workflow `vision-claw-ios` incluye:
-```yaml
-publishing:
-  app_store_connect:
-    auth: integration
-    submit_to_testflight: true    # ← Auto-sube después del build
-```
+- Codemagic compila en Mac Mini (cloud) ✅
+- Descargas el IPA en Windows
+- Instalas en iPhone desde Windows/WSL ✅
 
 ---
 
-## 🚀 Pasos para configurar (como Driports)
+## 🚀 Pasos (4 principales)
 
-### 1. Inicia sesión en Codemagic
+### 1️⃣ Registrarse en Codemagic (5 min)
 
 ```
 https://codemagic.io → "Sign up" → "Sign in with GitHub"
 Usa: subastasrd21
 ```
 
-### 2. Agregar tu repositorio
+### 2️⃣ Agregar tu repositorio (2 min)
 
 ```
 Dashboard → "New app"
@@ -33,180 +27,215 @@ Selecciona: subastasrd21/VisionClaw
 Presiona "Continue"
 ```
 
-### 3. Configurar App Store Connect Integration ⭐
+### 3️⃣ Crear grupo de variables (5 min)
 
-Este es el paso clave que conecta con TestFlight automáticamente.
-
-**3a. En App Store Connect:**
-1. Ve a https://appstoreconnect.apple.com
-2. Account → Users and Access → Keys (API)
-3. Presiona "+" para crear nueva clave
-4. Selecciona "App Manager" como rol
-5. Descarga el `.p8` file (solo se descarga una vez)
-6. Copia los valores:
-   - Issuer ID
-   - Key ID
-
-**3b. En Codemagic:**
-1. Team Settings → Integrations → App Store Connect
-2. Presiona "Connect" / "Add new"
-3. Nombre: **"VisionClaw App Store Connect"**
-4. Pega en Codemagic:
-   - Issuer ID
-   - Key ID
-   - Contenido del `.p8` file (abre en editor de texto)
-5. Presiona "Save"
-
-✅ Codemagic ahora puede publicar en TestFlight automáticamente.
-
-### 4. Crear grupos de variables de entorno
-
-**Grupo 1: visionclaw-secrets** (marcar cada una como "Secret")
+**Grupo: visionclaw-secrets** (marcar TODAS como "Secret")
 
 | Variable | Valor |
 |----------|-------|
 | `GEMINI_API_KEY` | `AIzaSyBO0qrKrRJ0PflM-Qf4-5ddtYiiD5h3Ht8` |
-| `DISTRIBUTION_CERT_B64` | Tu certificado .p12 en base64 |
-| `DISTRIBUTION_CERT_PASSWORD` | Contraseña de tu certificado |
+| `DEVELOPMENT_CERT_B64` | Tu certificado .p12 en base64 |
+| `DEVELOPMENT_CERT_PASSWORD` | Contraseña de tu certificado |
 
-**Cómo obtener DISTRIBUTION_CERT_B64:**
-```bash
-# En tu Mac o WSL:
-base64 -w0 ~/path/to/distribution_cert.p12 && echo
-
-# Copia todo el output (sin saltos de línea)
-# Pégalo en DISTRIBUTION_CERT_B64
-```
-
-**Grupo 2: visionclaw-config** (valores normales, NO secret)
+**Grupo: visionclaw-config** (valores normales, NO secret)
 
 | Variable | Valor |
 |----------|-------|
 | `BUNDLE_ID` | `com.intentlab.visionclaw` |
-| `APP_STORE_APPLE_ID` | Tu App ID de App Store (ej: 6544789743) |
 
-### 5. Configurar certificados y provisioning profiles
+---
 
-**5a. Crear provisioning profile:**
+## 📜 Obtener tu Development Certificate
+
+### Opción A: Si ya lo tienes (de Driports)
+
+En **WSL**:
+```bash
+# Localiza tu certificado .p12
+find ~ -name "*.p12" 2>/dev/null
+
+# Convierte a base64
+base64 -w0 ~/path/to/development_cert.p12 > /tmp/cert_b64.txt
+
+# Copia el contenido
+cat /tmp/cert_b64.txt
+# Selecciona todo, copia a Codemagic
+```
+
+### Opción B: Si no lo tienes
+
+Necesitarás acceso temporal a:
+- macOS (prestada) O
+- Windows con iTunes + AppleMobileDeviceService O
+- Contactar a alguien con Mac para que lo exporte
+
+Una vez tengas el `.p12`:
+```bash
+# En WSL:
+base64 -w0 ~/Downloads/development_cert.p12 > /tmp/cert_b64.txt
+cat /tmp/cert_b64.txt
+```
+
+---
+
+## 📱 Crear Ad Hoc Provisioning Profile
+
+**IMPORTANTE**: Necesitas el **UDID de tu iPhone**.
+
+### A. Obtener UDID:
+
+```bash
+# En Windows: iTunes → Device → UDID
+# O conecta iPhone a WSL y ejecuta:
+
+# Instalar libimobiledevice en WSL (una sola vez)
+sudo apt update && sudo apt install -y libimobiledevice6
+
+# Obtener UDID
+idevice_id -l
+```
+
+### B. Crear Profile en Apple Developer:
 
 1. Ve a https://developer.apple.com/account/resources/profiles/list
-2. Presiona "+"
-3. Selecciona "App Store"
-4. Bundle ID: `com.intentlab.visionclaw`
-5. Certificados: Selecciona tu certificado de distribución
-6. Dispositivos: Selecciona todos tus dispositivos (iPhone + Meta Rayban 2)
-7. Presiona "Continue" → "Generate" → "Download"
+2. Presiona **"+"**
+3. Selecciona **"Ad Hoc"**
+4. **App ID**: `com.intentlab.visionclaw`
+5. **Certificados**: Selecciona tu Development Certificate
+6. **Devices**: Checkea tu iPhone (con UDID)
+7. **Continue** → **Generate** → **Download**
 
-**5b. Commit del profile:**
+### C. Commit al repo:
+
 ```bash
-# En tu repo VisionClaw (raíz):
+# En tu repo VisionClaw (Windows o WSL):
 mkdir -p ios/codemagic
-cp ~/Downloads/VisionClaw_App_Store.mobileprovision ios/codemagic/
-git add ios/codemagic/VisionClaw_App_Store.mobileprovision
-git commit -m "chore: add App Store provisioning profile"
+mv ~/Downloads/VisionClaw_Ad_Hoc.mobileprovision ios/codemagic/
+
+git add ios/codemagic/
+git commit -m "chore: add Ad Hoc provisioning profile for sideload"
 git push
 ```
 
-### 6. Obtener certificado de distribución
-
-**Si ya lo tienes:**
-```bash
-# Convierte a base64
-base64 -w0 ~/path/to/distribution_cert.p12 > cert_b64.txt
-
-# Copia el contenido a DISTRIBUTION_CERT_B64 en Codemagic
-cat cert_b64.txt | pbcopy  # en Mac
-# o simplemente cat cert_b64.txt y copia manualmente
-```
-
-**Si no lo tienes:**
-1. Ve a https://developer.apple.com/account/resources/certificates/list
-2. Presiona "+"
-3. Selecciona "Apple Distribution"
-4. Sigue los pasos
-5. Descarga el `.cer`
-6. Abre en Keychain Access → Export como `.p12`
-7. Convierte a base64 (ver arriba)
-
 ---
 
-## 🎯 Lanzar primer build
+## 🎯 Lanzar primer build (15 min)
 
 1. En Codemagic → Proyecto VisionClaw
-2. Presiona "Start new build"
+2. Presiona **"Start new build"**
 3. Selecciona:
    - Branch: `main`
    - Workflow: `vision-claw-ios`
-4. Presiona "Build"
+4. Presiona **"Build"**
 
-**¿Qué pasa automáticamente?**
-```
-1. ✅ Compila iOS en Mac Mini (Codemagic)
-2. ✅ Firma con tu certificado + provisioning profile
-3. ✅ Crea IPA
-4. ✅ SUBE AUTOMÁTICAMENTE A TESTFLIGHT
-5. 📧 Te envía email de confirmación
-```
+**Espera ~15 minutos.** Cuando esté listo:
 
-**Tiempo estimado:** 20-30 minutos
+```
+✅ Build completo
+✅ Email de notificación
+✅ Artifacts → build/ipa/CameraAccess.ipa
+```
 
 ---
 
-## 📱 Instalar desde TestFlight
+## 📥 Descargar e instalar el IPA (en Windows)
 
-Una vez que el build está en TestFlight:
+### Paso A: Descargar IPA
 
-1. En tu iPhone, abre **TestFlight** app
-2. Busca "VisionClaw"
-3. Presiona "Install"
-4. Espera que se complete (~2-5 min)
-5. Abre VisionClaw
-6. Presiona "Permitir" cuando pida acceso a cámara/micrófono
-7. ¡Listo! Deberías ver video de tu iPhone en tiempo real procesado por Gemini
+1. En Codemagic, ve a **Artifacts**
+2. Descarga `build/ipa/CameraAccess.ipa`
+3. Guarda en: `C:\Users\maclo\Downloads\CameraAccess.ipa`
+
+### Paso B: Instalar en iPhone (3 opciones)
+
+#### **Opción 1: iTunes (más simple)**
+
+```
+1. Abre iTunes en Windows
+2. Conecta iPhone
+3. Arrastra CameraAccess.ipa a iTunes
+4. Selecciona tu iPhone
+5. Presiona Install/Sync
+```
+
+#### **Opción 2: Windows Device Portal (si iOS 17+)**
+
+```
+1. En iPhone: Settings → Developer
+2. Enable Developer Mode
+3. Enable Wireless Device Portal
+4. En Windows: Busca "Windows Device Portal"
+5. Ingresa IP de tu iPhone
+6. Upload IPA
+```
+
+#### **Opción 3: WSL + libimobiledevice (recomendado)**
+
+```bash
+# En WSL, instala herramientas (una sola vez)
+sudo apt update
+sudo apt install -y libimobiledevice6 libimobiledevice-utils
+
+# Conecta iPhone a Windows por USB
+# Luego en WSL:
+
+# Verifica que se ve el iPhone
+idevice_id -l
+# Deberías ver tu UDID
+
+# Descarga el IPA (está en Windows)
+cp /mnt/c/Users/maclo/Downloads/CameraAccess.ipa ~/CameraAccess.ipa
+
+# Instala en iPhone
+ios-app-installer -i ~/CameraAccess.ipa
+# O si eso no funciona:
+ideviceinstaller -i ~/CameraAccess.ipa
+```
 
 ---
 
-## 🤖 Android (opcional después)
+## 🎉 Listo
 
-Mismo proceso pero con Google Play Console:
-
-**Prerequisitos:**
-1. Crear un keystore (como Driports)
-2. Subir a Codemagic como env var `ANDROID_KEYSTORE`
-3. El workflow `vision-claw-android` automáticamente:
-   - Compila APK
-   - Compila AAB (bundle)
-   - Sube a Play Store en track "internal"
+Una vez instalado:
+1. Abre VisionClaw en tu iPhone
+2. Presiona "Permitir" para cámara/micrófono
+3. ¡Debería ver video en tiempo real + Gemini procesando!
 
 ---
 
-## 📚 Referencia: Variables de entorno en Codemagic
+## 🔄 Workflow para desarrollo rápido
 
-### visionclaw-secrets (grupo)
-```
-GEMINI_API_KEY=AIzaSyBO0qrKrRJ0PflM-Qf4-5ddtYiiD5h3Ht8
-DISTRIBUTION_CERT_B64=MIIJZQIBAzCCCRwGCSqGSIb3DQEBBQAwggkO... (largo)
-DISTRIBUTION_CERT_PASSWORD=tu_contraseña
-```
+```bash
+# 1. En WSL, haces cambios al código
+git add -A
+git commit -m "feat: cambio aquí"
+git push
 
-### visionclaw-config (grupo)
-```
-BUNDLE_ID=com.intentlab.visionclaw
-APP_STORE_APPLE_ID=6544789743  (cámbialo por tu App ID)
+# 2. En Codemagic UI:
+# Start new build → vision-claw-ios → Build
+# Espera ~15 min
+
+# 3. Descarga IPA desde Codemagic UI
+# (guardas en Downloads)
+
+# 4. Instala en iPhone (iTunes o WSL)
+ios-app-installer -i ~/CameraAccess.ipa
+
+# 5. Prueba en iPhone
 ```
 
 ---
 
 ## 🔐 Seguridad: Regenera API key después
 
-Una vez que TestFlight build esté exitoso:
+Una vez que todo funciona:
 
 ```bash
 # 1. Ve a https://aistudio.google.com/apikey
-# 2. Elimina la clave actual
+# 2. Presiona "Delete" en la clave actual
 # 3. Genera nueva clave
-# 4. En Codemagic UI: actualiza GEMINI_API_KEY
-# 5. Localmente:
+# 4. En Codemagic → visionclaw-secrets → actualiza GEMINI_API_KEY
+# 5. Localmente en WSL:
 
 sed -i 's/AIzaSyBO0qrKrRJ0PflM-Qf4-5ddtYiiD5h3Ht8/TU_NUEVA_CLAVE/g' \
   samples/CameraAccess/CameraAccess/Secrets.swift \
@@ -217,15 +246,32 @@ git add -A && git commit -m "chore: update Gemini API key" && git push
 
 ---
 
+## 🔗 Herramientas Windows
+
+**iTunes**: https://www.apple.com/itunes/download/ (Windows)
+
+**libimobiledevice en WSL**:
+```bash
+sudo apt install -y libimobiledevice6 libimobiledevice-utils
+```
+
+---
+
 ## 🆘 Troubleshooting
 
 | Error | Solución |
 |-------|----------|
-| "No matching provisioning profile" | Verifica que `ios/codemagic/VisionClaw_App_Store.mobileprovision` existe en repo |
-| "Certificate not found" | Asegúrate que DISTRIBUTION_CERT_B64 y password son correctos |
-| "App Store Connect API error" | Regenera el `.p8` file desde developer.apple.com |
-| "Build timeout (>90 min)" | Aumenta `max_build_duration` en `codemagic.yaml` |
+| "Provisioning profile not found" | Verifica que `ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision` existe en repo |
+| "Certificate not found" en Codemagic | Asegúrate que DEVELOPMENT_CERT_B64 y password son correctos |
+| iPhone no aparece en iTunes | Instala/actualiza iTunes desde Microsoft Store |
+| `idevice_id: command not found` en WSL | Ejecuta: `sudo apt install libimobiledevice-utils` |
+| "Device not trusted" en iPhone | Presiona "Trust" en el popup del iPhone |
 
 ---
 
-**¿Preguntas?** Cuéntame cuando tengas configurado App Store Connect en Codemagic. Luego lanzamos el primer build. 🚀
+**¿Listo?** Cuéntame cuando tengas:
+1. ✅ Development Certificate (base64)
+2. ✅ Ad Hoc Profile (commit al repo)
+3. ✅ Variables en Codemagic
+
+Luego lanzamos el primer build. 🚀
