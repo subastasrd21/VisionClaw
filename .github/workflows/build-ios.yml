@@ -1,0 +1,152 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'samples/CameraAccess/**'
+      - '.github/workflows/build-ios.yml'
+
+jobs:
+  build:
+    runs-on: macos-13
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+          xcode-select -p
+
+      - name: Create Keychain and Import Certificate
+        env:
+          DEVELOPMENT_CERT_B64: ${{ secrets.DEVELOPMENT_CERT_B64 }}
+          DEVELOPMENT_CERT_PASSWORD: ${{ secrets.DEVELOPMENT_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -e
+
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD:-build123}
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          CERT_PATH=$RUNNER_TEMP/development_cert.p12
+          echo "$DEVELOPMENT_CERT_B64" | base64 -D > "$CERT_PATH"
+
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$DEVELOPMENT_CERT_PASSWORD" \
+            -T /usr/bin/codesign
+
+          # Add keychain to search list
+          security list-keychains -s "$KEYCHAIN_PATH" $(security list-keychains | sed s/\"//g)
+
+      - name: Install Provisioning Profiles
+        run: |
+          set -e
+          PROFILE_DIR="${HOME}/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+
+          # Install Development profile
+          if [ -f "ios/codemagic/VisionClaw_Development.mobileprovision" ]; then
+            cp "ios/codemagic/VisionClaw_Development.mobileprovision" "$PROFILE_DIR/"
+            echo "✅ Development profile installed"
+          else
+            echo "❌ Development profile not found"
+            exit 1
+          fi
+
+          # Install Ad Hoc profile
+          if [ -f "ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision" ]; then
+            cp "ios/codemagic/VisionClaw_Ad_Hoc.mobileprovision" "$PROFILE_DIR/"
+            echo "✅ Ad Hoc profile installed"
+          else
+            echo "❌ Ad Hoc profile not found"
+            exit 1
+          fi
+
+      - name: Generate Secrets.swift
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -e
+          printf 'import Foundation\n\nenum Secrets {\n  static let geminiAPIKey = "%s"\n  static let openClawHost = "http://localhost"\n  static let openClawPort = 18789\n  static let openClawHookToken = ""\n  static let openClawGatewayToken = ""\n  static let webrtcSignalingURL = "ws://localhost:8080"\n}\n' "$GEMINI_API_KEY" > samples/CameraAccess/CameraAccess/Secrets.swift
+          echo "✅ Secrets.swift generated"
+
+      - name: Build iOS IPA
+        working-directory: samples/CameraAccess
+        env:
+          BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+        run: |
+          set -e
+          echo "Building iOS IPA..."
+
+          xcodebuild archive \
+            -project CameraAccess.xcodeproj \
+            -scheme "CameraAccess" \
+            -configuration Release \
+            -derivedDataPath build \
+            -archivePath build/CameraAccess.xcarchive \
+            -destination 'generic/platform=iOS' \
+            -allowProvisioningUpdates \
+            -verbose
+
+          echo "Exporting IPA..."
+          xcodebuild -exportArchive \
+            -archivePath build/CameraAccess.xcarchive \
+            -exportPath build/ipa \
+            -exportOptionsPlist ExportOptions.plist
+
+          echo "✅ IPA generated"
+          ls -lh build/ipa/*.ipa
+
+      - name: Upload IPA Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VisionClaw-IPA
+          path: samples/CameraAccess/build/ipa/*.ipa
+          retention-days: 30
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            samples/CameraAccess/build/**/*.log
+            /var/tmp/xcodebuild*.log
+          retention-days: 7
+
+      - name: Build Complete
+        if: success()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "✅ IPA built successfully!"
+          echo "=========================================="
+          echo ""
+          echo "📥 Download from GitHub Actions:"
+          echo "   Actions → Build iOS IPA → VisionClaw-IPA artifact"
+          echo ""
+          echo "📱 Install on iPhone:"
+          echo "   Option A: Use fastlane"
+          echo "     gem install fastlane"
+          echo "     fastlane run install_on_device ipa:path/to/CameraAccess.ipa"
+          echo ""
+          echo "   Option B: Use Xcode"
+          echo "     open build/ipa/CameraAccess.ipa"
+          echo ""
+          echo "   Option C: Use ios-app-installer"
+          echo "     npm install -g ios-app-installer"
+          echo "     ios-app-installer -i CameraAccess.ipa"
+          echo ""
